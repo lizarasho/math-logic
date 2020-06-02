@@ -12,7 +12,7 @@ Lexer.hs Parser.hs: Lexer.x Parser.y
 	happy -g -a -c Parser.y -o Parser.hs
 
 clean:
-	rm *.o *.hi
+	rm *.o *.hi Lexer.hs Parser.hs solution
 
 pack:
 	zip B Makefile *.hs Lexer.x Parser.y

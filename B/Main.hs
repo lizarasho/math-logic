@@ -20,27 +20,19 @@ checkIfHypothesis :: Exp -> [Exp] -> Maybe Int
 checkIfHypothesis = elemIndex
 
 checkIfAxiom :: Exp -> Maybe Int
-checkIfAxiom (Operation Impl a (Operation Impl b a')) | a == a' = Just 1
-checkIfAxiom (Operation Impl 
-                  (Operation Impl a b)
-                  (Operation Impl 
-                        (Operation Impl a' (Operation Impl b' c'))
-                        (Operation Impl a'' c''))) | a == a' && a' == a'' && b == b' && c' == c'' = Just 2 
-checkIfAxiom (Operation Impl a (Operation Impl b (Operation And a' b'))) | a == a' && b == b' = Just 3
-checkIfAxiom (Operation Impl (Operation And a b) a') | a == a' = Just 4
-checkIfAxiom (Operation Impl (Operation And a b) b') | b == b' = Just 5
-checkIfAxiom (Operation Impl a (Operation Or a' b')) | a == a' = Just 6
-checkIfAxiom (Operation Impl b (Operation Or a' b')) | b == b' = Just 7
-checkIfAxiom (Operation Impl 
-                  (Operation Impl a c)
-                  (Operation Impl 
-                        (Operation Impl b' c')
-                        (Operation Impl (Operation Or a'' b'') c''))) | a == a'' && b' == b'' && c' == c'' && c' == c'' = Just 8
-checkIfAxiom (Operation Impl
-                  (Operation Impl a b) 
-                  (Operation Impl (Operation Impl a' (Not b')) (Not a''))) | a == a' && a' == a'' && b == b' = Just 9     
-checkIfAxiom (Operation Impl (Not (Not a)) a') | a == a' = Just 10
-checkIfAxiom _ = Nothing  
+checkIfAxiom (a :->: (b :->: a')) | a == a' = Just 1
+checkIfAxiom ((a :->: b) :->: ((a' :->: (b' :->: c')) :->: (a'' :->: c''))) 
+        | a == a' && a' == a'' && b == b' && c' == c'' = Just 2 
+checkIfAxiom (a :->: (b :->: (a' :&: b'))) | a == a' && b == b' = Just 3
+checkIfAxiom ((a :&: b) :->: a') | a == a' = Just 4
+checkIfAxiom ((a :&: b) :->: b') | b == b' = Just 5
+checkIfAxiom (a :->: (a' :|: b')) | a == a' = Just 6
+checkIfAxiom (b :->: (a' :|: b')) | b == b' = Just 7
+checkIfAxiom ((a :->: c) :->: ((b' :->: c') :->: ((a'' :|: b'') :->: c''))) 
+        | a == a'' && b' == b'' && c == c' && c' == c'' = Just 8
+checkIfAxiom ((a :->: b) :->: ((a' :->: (Not b')) :->: (Not a''))) | a == a' && a' == a'' && b == b' = Just 9
+checkIfAxiom ((Not (Not a)) :->: a') | a == a' = Just 10
+checkIfAxiom _ = Nothing
   
 checkIfMP :: Exp -> Map.Map Exp Int -> Map.Map Exp [(Exp, Int)] -> Maybe AnnotatedExp
 checkIfMP exp mapExp mapTails = case Map.lookup exp mapTails of
@@ -58,7 +50,7 @@ getAnnotatedExp exp hypotheses mapExp mapTails = case checkIfHypothesis exp hypo
           Nothing -> checkIfMP exp mapExp mapTails
 
 addTail :: Exp -> Map.Map Exp [(Exp, Int)] -> Int -> Map.Map Exp [(Exp, Int)]
-addTail (Operation Impl a b) mapTails n = case Map.lookup b mapTails of
+addTail (a :->: b) mapTails n = case Map.lookup b mapTails of
   Just xs -> Map.insert b ((a, n) : xs) mapTails
   Nothing -> Map.insert b [(a, n)] mapTails
 addTail _ mapTails _ = mapTails
@@ -108,7 +100,7 @@ getInd exp annExp = findIndex (\a -> getExp a == exp) annExp
 
 process :: [String] -> [String]
 process input = let 
-  FirstLine (context, provedExp) = parse $ alexScanTokens $ head input
+  Header (context, provedExp) = parse $ alexScanTokens $ head input
   exprs = map (getLineExp . parse . alexScanTokens) (tail input)
   annExprs' = annotate exprs context provedExp
   in case annExprs' of 
@@ -117,6 +109,6 @@ process input = let
         case (getInd provedExp annExprs) of
           Nothing -> ["Proof is incorrect"]
           Just ind ->
-            (show $ FirstLine (context, provedExp)) : (filterAndRenum annExprs $ getMapInd $ take (ind + 1) annExprs)
+            (show $ Header (context, provedExp)) : (filterAndRenum annExprs $ getMapInd $ take (ind + 1) annExprs)
 
 main = interact (unlines . process . lines)  

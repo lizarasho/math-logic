@@ -30,8 +30,8 @@ import Types
 %%
 
 Line
-    : Context '|-' Exp   { FirstLine ($1, $3) }
-    | '|-' Exp           { FirstLine ([], $2) }
+    : Context '|-' Exp   { Header ($1, $3) }
+    | '|-' Exp           { Header ([], $2) }
     | Exp                { Line $1 }
 
 Context
@@ -39,9 +39,9 @@ Context
     | Exp                { [$1] }
 
 Exp  : '!' Exp              { Not $2 }
-     | Exp '->' Exp         { Operation Impl $1 $3}
-     | Exp '&' Exp          { Operation And $1 $3 }
-     | Exp '|' Exp          { Operation Or $1 $3 }
+     | Exp '->' Exp         { $1 :->: $3 }
+     | Exp '&' Exp          { $1 :&: $3 }
+     | Exp '|' Exp          { $1 :|: $3 }
      | '(' Exp ')'          { $2 }
      | var                  { Variable $1 }
 

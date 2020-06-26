@@ -110,7 +110,3 @@ process e = let
         
 main :: IO()
 main = interact (unlines . process) 
-
-main' = do
-  text <- readFile "/Users/liza/Desktop/matlog/test"
-  writeFile "/Users/liza/Desktop/matlog/out" (unlines $ process text)

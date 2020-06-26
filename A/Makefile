@@ -14,4 +14,4 @@ clean:
 	rm *.o *.hi
 
 pack:
-	zip B Makefile Lexer.x Parser.y
+	zip A Makefile Lexer.x Parser.y

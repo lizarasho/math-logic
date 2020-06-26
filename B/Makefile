@@ -3,7 +3,6 @@
 all: Lexer.hs Parser.hs
 	ghc -O2 Main.hs -o solution
 
-
 run: 
 	./solution
 

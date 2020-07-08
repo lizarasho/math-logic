@@ -42,37 +42,40 @@ tryMP exp mapExp mapTails = case Map.lookup exp mapTails of
     [] -> Nothing 
   Nothing -> Nothing 
 
+isNotProved :: String
 isNotProved = "is not proved"
 
-tryIntro :: Exp -> Map.Map Exp Int -> Either AnnotatedExp String
+tryIntro :: Exp -> Map.Map Exp Int -> Either String AnnotatedExp
 tryIntro exp mapExp = let
-  helper :: Exp -> Exp -> Term -> Either AnnotatedExp String
+  helper :: Exp -> Exp -> Term -> Either String AnnotatedExp
   helper f h x
-    | Map.member h mapExp && hasFreeOccurrence f x = Right $ "variable " ++ show x ++ " occurs free in ?@-rule"
-    | Map.member h mapExp && not (hasFreeOccurrence f x) = Left $ Intro exp $ mapExp Map.! h
-    | otherwise = Right isNotProved
+    | Map.member h mapExp && hasFreeOccurrence f x = Left $ "variable " ++ show x ++ " occurs free in ?@-rule"
+    | Map.member h mapExp && not (hasFreeOccurrence f x) = Right $ Intro exp $ mapExp Map.! h
+    | otherwise = Left isNotProved
 
-  tryForall :: Exp  -> Either AnnotatedExp String
+  tryForall :: Exp  -> Either String AnnotatedExp
   tryForall (f :->: ((:@:) x g)) = helper f (f :->: g) x    
-  tryForall _ = Right isNotProved
+  tryForall _ = Left isNotProved
 
-  tryExists :: Exp -> Either AnnotatedExp String
+  tryExists :: Exp -> Either String AnnotatedExp
   tryExists (((:?:) x g) :->: f) = helper f (g :->: f) x
-  tryExists _ = Right isNotProved
+  tryExists _ = Left isNotProved
   in let 
-      resForall = tryForall exp
-      resExists = tryExists exp
-      in if isLeft resExists || isRight resForall && resExists /= Right isNotProved
-        then resExists
-        else resForall
+    resForall = tryForall exp
+    resExists = tryExists exp
+    in if isRight resExists || isLeft resForall && resExists /= Left isNotProved
+      then resExists
+      else resForall
 
 hasFreeOccurrence :: Exp -> Term -> Bool
 hasFreeOccurrence (Exp p) t = predContains p t
 hasFreeOccurrence (Not e) t = hasFreeOccurrence e t
-hasFreeOccurrence ((:@:) v e) t | v == t = False
-                                   | otherwise = hasFreeOccurrence e t
-hasFreeOccurrence ((:?:) v e) t | v == t = False
-                                   | otherwise = hasFreeOccurrence e t
+hasFreeOccurrence ((:@:) v e) t 
+  | v == t = False
+  | otherwise = hasFreeOccurrence e t
+hasFreeOccurrence ((:?:) v e) t 
+  | v == t = False
+  | otherwise = hasFreeOccurrence e t
 hasFreeOccurrence (u :->: v) t = hasFreeOccurrence u t || hasFreeOccurrence v t  
 hasFreeOccurrence (u :|: v) t = hasFreeOccurrence u t || hasFreeOccurrence v t  
 hasFreeOccurrence (u :&: v) t = hasFreeOccurrence u t || hasFreeOccurrence v t 
@@ -86,56 +89,57 @@ termContains Zero _ = False
 termContains (Succ a) t = termContains a t
 termContains (u :+: v) t = termContains u t || termContains v t
 termContains (u :*: v) t = termContains u t || termContains v t
-termContains a@(Term _) t | a == t = True
-                          | otherwise = False
+termContains a@(Term _) t 
+  | a == t = True
+  | otherwise = False
 
-getAnnotatedExp :: Exp -> Map.Map Exp Int -> Map.Map Exp [(Exp, Int)] -> Either AnnotatedExp String
+getAnnotatedExp :: Exp -> Map.Map Exp Int -> Map.Map Exp [(Exp, Int)] -> Either String AnnotatedExp
 getAnnotatedExp exp mapExp mapTails = case tryAxiomSch exp of
-    Left n -> Left $ AxiomSch exp $ show n
-    Right axErr -> case tryAxiom exp of 
-      Just m -> Left $ Axiom exp m
-      Nothing -> case tryA9AxiomSch exp of 
-        True -> Left $ AxiomSch exp "A9"
-        False -> case tryMP exp mapExp mapTails of 
-          Just annExp -> Left annExp
-          Nothing -> case tryIntro exp mapExp of
-            Left a -> Left a
-            Right introErr -> if (introErr == isNotProved) 
-              then Right axErr
-              else Right introErr
+  Right n -> Right $ AxiomSch exp $ show n
+  Left axErr -> case tryAxiom exp of 
+    Just m -> Right $ Axiom exp m
+    Nothing -> case tryA9AxiomSch exp of 
+      True -> Right $ AxiomSch exp "A9"
+      False -> case tryMP exp mapExp mapTails of 
+        Just annExp -> Right annExp
+        Nothing -> case tryIntro exp mapExp of
+          Right a -> Right a
+          Left introErr -> if (introErr == isNotProved) 
+            then Left axErr
+            else Left introErr
 
-tryAxiomSch :: Exp -> Either Int String
-tryAxiomSch (a :->: (b :->: a')) | a == a' = Left 1 
+tryAxiomSch :: Exp -> Either String Int
+tryAxiomSch (a :->: (b :->: a')) | a == a' = Right 1 
 tryAxiomSch ((a :->: b) :->: ((a' :->: (b' :->: c')) :->: (a'' :->: c''))) 
-        | a == a' && a' == a'' && b == b' && c' == c'' = Left 2 
-tryAxiomSch (a :->: (b :->: (a' :&: b'))) | a == a' && b == b' = Left 5
-tryAxiomSch ((a :&: b) :->: a') | a == a' = Left 3
-tryAxiomSch ((a :&: b) :->: b') | b == b' = Left 4
-tryAxiomSch (a :->: (a' :|: b')) | a == a' = Left 6
-tryAxiomSch (b :->: (a' :|: b')) | b == b' = Left 7
+  | a == a' && a' == a'' && b == b' && c' == c'' = Right 2 
+tryAxiomSch (a :->: (b :->: (a' :&: b'))) | a == a' && b == b' = Right 5
+tryAxiomSch ((a :&: b) :->: a') | a == a' = Right 3
+tryAxiomSch ((a :&: b) :->: b') | b == b' = Right 4
+tryAxiomSch (a :->: (a' :|: b')) | a == a' = Right 6
+tryAxiomSch (b :->: (a' :|: b')) | b == b' = Right 7
 tryAxiomSch ((a :->: c) :->: ((b' :->: c') :->: ((a'' :|: b'') :->: c''))) 
-        | a == a'' && b' == b'' && c == c' && c' == c'' = Left 8
-tryAxiomSch ((a :->: b) :->: ((a' :->: (Not b')) :->: (Not a''))) | a == a' && a' == a'' && b == b' = Left 9
-tryAxiomSch ((Not (Not a)) :->: a') | a == a' = Left 10
+  | a == a'' && b' == b'' && c == c' && c' == c'' = Right 8
+tryAxiomSch ((a :->: b) :->: ((a' :->: (Not b')) :->: (Not a''))) | a == a' && a' == a'' && b == b' = Right 9
+tryAxiomSch ((Not (Not a)) :->: a') | a == a' = Right 10
 
 tryAxiomSch e = let
-  helper :: Maybe (Maybe Term) -> Term -> Exp -> Exp -> Int -> Either Int String
+  helper :: Maybe (Maybe Term) -> Term -> Exp -> Exp -> Int -> Either String Int
   helper (Just t) x f f' n 
-    | isNothing t || checkExpFree f f' x (Set.empty) (getVarsSet $ fromJust t) = Left n
-    | otherwise = Right $ getAxiomErrorString x $ fromJust t 
-  helper Nothing _ _ _ _ = Right isNotProved
+    | isNothing t || checkExpFree f f' x (Set.empty) (getVarsSet $ fromJust t) = Right n
+    | otherwise = Left $ getAxiomErrorString x $ fromJust t 
+  helper Nothing _ _ _ _ = Left isNotProved
 
-  try11AxSch :: Exp -> Either Int String
+  try11AxSch :: Exp -> Either String Int
   try11AxSch (((:@:) x f) :->: f') = helper (tryReplaceExprsVar f f' x True) x f f' 11
-  try11AxSch _ = Right isNotProved
+  try11AxSch _ = Left isNotProved
 
-  try12AxSch :: Exp -> Either Int String
+  try12AxSch :: Exp -> Either String Int
   try12AxSch (f :->: (((:?:) x f'))) = helper (tryReplaceExprsVar f' f x True) x f' f 12 
-  try12AxSch _ = Right isNotProved
+  try12AxSch _ = Left isNotProved
   in let 
     res11 = try11AxSch e
     res12 = try12AxSch e
-    in if isLeft res11 || isRight res12 && res11 /= Right isNotProved
+    in if isRight res11 || isLeft res12 && res11 /= Left isNotProved
       then res11
       else res12
 
@@ -228,13 +232,14 @@ tryReplaceTermsVar a@(Term _) a' t isFree
   | otherwise = Nothing
 tryReplaceTermsVar _ _ _ _  = Nothing
 
-toString :: Int -> Either AnnotatedExp String -> String
-toString ind (Left (AxiomSch exp n)) = "[" ++ show ind ++ ". Ax. sch. " ++ n ++ "] " ++ show exp
-toString ind (Left (Axiom exp n)) = "[" ++ show ind ++ ". Ax. A" ++ show n ++ "] " ++ show exp
-toString ind (Left (MP exp l k)) = "[" ++ show ind ++ ". M.P. " ++ show (l + 1) ++ ", " ++ show (k + 1) ++ "] " ++ show exp
-toString ind (Left (Intro exp k)) = "[" ++ show ind ++ ". ?@-intro " ++ show (k + 1) ++ "] " ++ show exp
-toString ind (Right s) | s == isNotProved = "Expression " ++ show ind ++ " " ++ s ++ "." 
-                       | otherwise = "Expression " ++ show ind ++ ": " ++ s ++ "." 
+toString :: Int -> Either String AnnotatedExp -> String
+toString ind (Right (AxiomSch exp n)) = "[" ++ show ind ++ ". Ax. sch. " ++ n ++ "] " ++ show exp
+toString ind (Right (Axiom exp n)) = "[" ++ show ind ++ ". Ax. A" ++ show n ++ "] " ++ show exp
+toString ind (Right (MP exp l k)) = "[" ++ show ind ++ ". M.P. " ++ show (l + 1) ++ ", " ++ show (k + 1) ++ "] " ++ show exp
+toString ind (Right (Intro exp k)) = "[" ++ show ind ++ ". ?@-intro " ++ show (k + 1) ++ "] " ++ show exp
+toString ind (Left s) 
+  | s == isNotProved = "Expression " ++ show ind ++ " " ++ s ++ "." 
+  | otherwise = "Expression " ++ show ind ++ ": " ++ s ++ "." 
 
 addTail :: Exp -> Map.Map Exp [(Exp, Int)] -> Int -> Map.Map Exp [(Exp, Int)]
 addTail (a :->: b) mapTails n = case Map.lookup b mapTails of
@@ -242,14 +247,14 @@ addTail (a :->: b) mapTails n = case Map.lookup b mapTails of
   Nothing -> Map.insert b [(a, n)] mapTails
 addTail _ mapTails _ = mapTails
 
-annotate :: [Exp] -> Exp -> [Either AnnotatedExp String]
+annotate :: [Exp] -> Exp -> [Either String AnnotatedExp]
 annotate exprs provedExp = helper exprs 0 Map.empty Map.empty where
-  helper :: [Exp] -> Int -> Map.Map Exp Int -> Map.Map Exp [(Exp, Int)] -> [Either AnnotatedExp String]
+  helper :: [Exp] -> Int -> Map.Map Exp Int -> Map.Map Exp [(Exp, Int)] -> [Either String AnnotatedExp]
   helper [] _ _ _ = []
   helper (exp : es) ind mapExp mapTails = 
     let 
       annExp = getAnnotatedExp exp mapExp mapTails
-    in if isRight annExp
+    in if isLeft annExp
       then [annExp]
       else annExp : (helper es (ind + 1) (Map.insert exp ind mapExp) (addTail exp mapTails ind)) 
 
@@ -260,13 +265,12 @@ process input = let
   exprs = map (getLineExp . parse . alexScanTokens) $ tail input
   annExprs = annotate exprs provedExp
   proof = (show header) : (map (uncurry toString) $ zip [1..] annExprs)
-  in 
-    case last annExprs of
-      Left exp -> 
-        if getExp exp /= provedExp
-          then proof ++ ["The proof proves different expression."]
-          else proof
-      Right s -> proof 
+  in case last annExprs of
+    Right exp -> 
+      if getExp exp /= provedExp
+        then proof ++ ["The proof proves different expression."]
+        else proof
+    Left s -> proof 
 
 main :: IO()
 main = interact (unlines . process . lines)
